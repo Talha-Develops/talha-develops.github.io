@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MealBook</title>
+<meta name="theme-color" content="#e8a317">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="MealBook">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap">
+<style>
+:root{color-scheme:light;--bg:#f6f7f4;--card:#fff;--ink:#1d2330;--mut:#667085;--line:#e3e6df;--b:#e8a317;--l:#3f9d5a;--s:#e2573f;--e:#d6528a;--n:#4a5bd0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#12151c;--card:#1b2029;--ink:#eef0f4;--mut:#9aa3b2;--line:#2a303c}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#12151c;--card:#1b2029;--ink:#eef0f4;--mut:#9aa3b2;--line:#2a303c}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Bricolage Grotesque",system-ui,sans-serif;padding-bottom:84px}
+main{max-width:560px;margin:0 auto;padding:16px}
+h1,h2{margin:0;font-weight:700;letter-spacing:-.02em}
+h1{font-size:30px;line-height:1.15}
+h2{font-size:19px}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+:focus-visible{outline:2px solid var(--n);outline-offset:2px}
+.row{display:flex;align-items:center;gap:10px}
+.sp{flex:1;min-width:0}
+.mut{color:var(--mut);font-size:14px;margin:0}
+.t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600}
+.btn.o{background:none;color:var(--ink);border:1.5px solid var(--line)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.meal{display:block;width:100%;text-align:left;margin-top:12px;border-left:6px solid var(--c);background:color-mix(in srgb,var(--c) 13%,var(--card));border-radius:6px 18px 18px 6px;padding:14px 16px}
+.dish{margin-top:12px;border-left:5px solid var(--c)}
+.th{width:56px;height:56px;border-radius:10px;object-fit:cover;flex:none}
+.ph{display:flex;gap:8px;overflow-x:auto;margin-top:8px;align-items:center}
+.ph:empty{display:none}
+.pw{position:relative;flex:none}
+.x{position:absolute;top:-6px;right:-6px;background:var(--ink);color:var(--bg);border-radius:50%;width:22px;height:22px;line-height:1}
+input,textarea{width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
+.st{font-size:26px;color:var(--line);padding:0 2px}
+.st.on,.rt{color:var(--b)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal button{aspect-ratio:1;border-radius:10px}
+.cal .has{background:color-mix(in srgb,var(--l) 28%,var(--card));font-weight:700}
+.cal .sel{outline:2px solid var(--ink)}
+.chat{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.msg{max-width:88%;padding:10px 12px;border-radius:14px;white-space:pre-wrap}
+.msg.u{align-self:flex-end;background:var(--ink);color:var(--bg)}
+.msg.a{background:var(--card);border:1px solid var(--line)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:6px;background:var(--card);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+nav button{flex:1;padding:6px;border-radius:12px;font-size:13px}
+nav .on{background:color-mix(in srgb,var(--ink) 10%,transparent);font-weight:700}
+.zoom{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:9}
+.zoom img{max-width:94%;max-height:90%;border-radius:12px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const pd=s=>new Date(s+"T00:00");
+const fmt=(s,o)=>pd(s).toLocaleDateString(undefined,o);
+const uid=()=>Math.random().toString(36).slice(2,9);
+const M=[["breakfast","Breakfast","🍳","--b"],["lunch","Lunch","🍛","--l"],["snacks","Snacks","🥟","--s"],["desserts","Desserts","🍮","--e"],["dinner","Dinner","🌙","--n"]];
+const T0=iso(new Date());
+let S={d:{}},v={tab:"day",date:T0,meal:null,draft:null,recs:{},chat:[],busy:0,cal:T0.slice(0,8)+"01",zoom:null,del:null,err:""};
+const dishes=(s,m)=>(S.d[s]||{})[m]||[];
+
+/* storage: IndexedDB, private to this browser */
+const idb=new Promise((ok,no)=>{try{const r=indexedDB.open("mealbook",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>ok(r.result);r.onerror=()=>no()}catch(e){no(e)}});
+const load=async()=>{try{const d=await idb;return await new Promise(ok=>{const q=d.transaction("kv").objectStore("kv").get("s");q.onsuccess=()=>ok(q.result);q.onerror=()=>ok()})}catch(e){}};
+const save=async()=>{try{const d=await idb;d.transaction("kv","readwrite").objectStore("kv").put(S,"s")}catch(e){}};
+const put=(s,m,d)=>{S.d[s]=S.d[s]||{};const L=S.d[s][m]=S.d[s][m]||[];const i=L.findIndex(x=>x.id===d.id);i<0?L.push(d):L[i]=d;save()};
+
+/* photos: shrink to 800px JPEG */
+const shrink=f=>new Promise(ok=>{const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const k=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext("2d").drawImage(i,0,0,c.width,c.height);ok(c.toDataURL("image/jpeg",.72))};i.onerror=()=>ok(null);i.src=r.result};r.onerror=()=>ok(null);r.readAsDataURL(f)});
+
+/* AI */
+const ai=async(p,o)=>{if(!window.claude)throw 0;const s=await claude.use("sample");if(!s)throw 0;return (await s(p,o)).text};
+const log=n=>{const o=[];Object.keys(S.d).sort().reverse().slice(0,n).forEach(s=>M.forEach(([k])=>{const L=dishes(s,k);if(L.length)o.push(s+" ("+fmt(s,{weekday:"long"})+") "+k+": "+L.map(d=>d.name+(d.r?" "+d.r+"/5":"")+(d.notes?" ["+d.notes.slice(0,80)+"]":"")).join("; "))}));return o.join("\n")||"(no meals logged yet)"};
+const ideas=async force=>{const k=v.meal,key=v.date+k;v.recs[key]="load";render();
+ try{const t=await ai(`You suggest ${k} ideas for a home cook. Date: ${v.date}. Their log, newest first:\n${log(30)}\n\nSuggest 3 ${k} dishes for ${v.date}. Avoid anything they had for ${k} in the last 5 days, favor dishes rated 4-5, and mix 2 familiar ideas with 1 new one. Reply with ONLY a JSON array like [{"name":"...","why":"one short sentence"}].`,{cache:!force,modelTier:"quick"});
+  v.recs[key]=JSON.parse(t.slice(t.indexOf("["),t.lastIndexOf("]")+1)).slice(0,3).map(x=>({name:String(x.name),why:String(x.why||"")}))}catch(e){v.recs[key]="err"}render()};
+const ask=async()=>{const q=($("[name=cq]")||{}).value;if(!q||!q.trim()||v.busy)return;v.chat.push({r:"u",t:q.trim()});v.busy=1;render();
+ try{const h=v.chat.slice(-7,-1).map(m=>(m.r==="u"?"User: ":"Assistant: ")+m.t).join("\n");
+  const t=await ai(`You are the assistant inside MealBook, a personal meal diary. Today is ${T0} (${fmt(T0,{weekday:"long"})}). Answer ONLY from the records below. If the answer is not in them, say you can’t find it in the diary. Be brief and friendly.\n\nRECORDS (date, meal: dishes with rating and notes):\n${log(400)}\n\nConversation so far:\n${h}\n\nUser: ${q.trim()}`,{cache:false});
+  v.chat.push({r:"a",t:t.trim()})}catch(e){v.chat.push({r:"a",t:"I couldn’t reach the AI. Allow AI for this page, then try again."})}
+ v.busy=0;render()};
+
+/* views */
+const dayView=()=>`<div class="row"><button class="btn o" data-act="pd" data-i="-1" aria-label="Previous day">‹</button><div class="sp" style="text-align:center"><h1>${v.date===T0?"Today":esc(fmt(v.date,{weekday:"long"}))}</h1><div class="mut">${esc(fmt(v.date,{day:"numeric",month:"long",year:"numeric"}))}</div></div><button class="btn o" data-act="pd" data-i="1" aria-label="Next day">›</button></div>`
+ +M.map(([k,n,ic,c])=>{const L=dishes(v.date,k),ph=L.flatMap(d=>d.photos).slice(0,3);
+  return `<button class="meal" style="--c:var(${c})" data-act="open" data-k="${k}"><div class="row"><span style="font-size:28px">${ic}</span><div class="sp"><h2>${n}</h2><div class="mut t">${L.length?esc(L.map(d=>d.name).join(", ")):"Nothing logged yet"}</div></div>${ph.map(p=>`<img class="th" src="${p}" alt="">`).join("")}</div></button>`}).join("");
+
+const form=()=>{const d=v.draft;return `<div class="card" style="margin-bottom:12px"><input name="name" placeholder="Dish name" value="${esc(d.name)}" aria-label="Dish name"><textarea name="notes" rows="3" placeholder="Ingredients, recipe or notes (optional)" aria-label="Notes" style="resize:vertical">${esc(d.notes)}</textarea><div class="row" style="margin-top:8px"><span class="mut">Rating</span>${[1,2,3,4,5].map(i=>`<button class="st ${i<=d.r?"on":""}" data-act="rate" data-i="${i}" aria-label="${i} stars">★</button>`).join("")}</div><div class="ph">${d.photos.map((p,i)=>`<span class="pw"><img class="th" src="${p}" alt=""><button class="x" data-act="rmp" data-i="${i}" aria-label="Remove photo">×</button></span>`).join("")}</div><button class="btn o" data-act="pick" style="margin-top:8px">📷 Add photos</button><input id="fi" type="file" accept="image/*" multiple hidden>${v.err?`<p class="mut" role="alert" style="margin-top:8px">${v.err}</p>`:""}<div class="row" style="margin-top:12px"><button class="btn sp" data-act="save">Save dish</button><button class="btn o" data-act="cancel">Cancel</button></div></div>`};
+
+const mealView=()=>{const [k,n,ic,c]=M.find(x=>x[0]===v.meal),L=dishes(v.date,k),r=v.recs[v.date+k];
+ return `<div style="--c:var(${c})"><div class="row"><button class="btn o" data-act="back" aria-label="Back to meals">‹</button><h1 class="sp">${ic} ${n}</h1></div><p class="mut" style="margin:4px 0 12px">${esc(fmt(v.date,{weekday:"long",day:"numeric",month:"long"}))}</p>`
+ +(v.draft?form():`<button class="btn" data-act="new" style="width:100%">Add a dish</button>`)
+ +(L.length?L.map(d=>`<div class="card dish"><div class="row"><b class="sp">${esc(d.name)}</b><span class="rt">${"★".repeat(d.r)}</span><button data-act="edit" data-id="${d.id}" aria-label="Edit ${esc(d.name)}">✏️</button><button data-act="del" data-id="${d.id}" aria-label="Delete ${esc(d.name)}">${v.del===d.id?"Delete?":"🗑️"}</button></div>${d.notes?`<p class="mut" style="margin-top:6px;white-space:pre-wrap">${esc(d.notes)}</p>`:""}<div class="ph">${d.photos.map(p=>`<img class="th" src="${p}" data-act="zoom" alt="Photo of ${esc(d.name)}">`).join("")}</div></div>`).join(""):`<p class="mut" style="margin-top:12px">No dishes yet. Add what you cooked, with photos if you like.</p>`)
+ +`<div class="row" style="margin-top:24px"><h2 class="sp">${v.date===T0?"Ideas for today":"Ideas for this day"}</h2><button class="btn o" data-act="ideas" aria-label="Refresh ideas">↻ Refresh</button></div>`
+ +(r==="load"?`<p class="mut" style="margin-top:8px">Thinking up ideas…</p>`:r==="err"?`<p class="mut" style="margin-top:8px">Couldn’t get ideas. Allow AI for this page, then refresh.</p>`:Array.isArray(r)?r.map((x,i)=>`<div class="card row" style="margin-top:8px"><div class="sp"><b>${esc(x.name)}</b><div class="mut">${esc(x.why)}</div></div><button class="btn" data-act="addidea" data-i="${i}" aria-label="Add ${esc(x.name)} to this menu">Add</button></div>`).join(""):"")+`</div>`};
+
+const histView=()=>{const c=pd(v.cal),y=c.getFullYear(),m=c.getMonth(),n=new Date(y,m+1,0).getDate();
+ let g="SMTWTFS".split("").map(x=>`<b class="mut">${x}</b>`).join("")+"<i></i>".repeat(c.getDay());
+ for(let d=1;d<=n;d++){const s=iso(new Date(y,m,d)),has=M.some(([k])=>dishes(s,k).length);g+=`<button class="${has?"has":""} ${s===v.date?"sel":""}" data-act="goto" data-d="${s}">${d}</button>`}
+ return `<h1>History</h1><div class="row" style="margin:12px 0"><button class="btn o" data-act="pm" data-i="-1" aria-label="Previous month">‹</button><b class="sp" style="text-align:center">${esc(c.toLocaleDateString(undefined,{month:"long",year:"numeric"}))}</b><button class="btn o" data-act="pm" data-i="1" aria-label="Next month">›</button></div><div class="cal">${g}</div><input name="q" type="search" placeholder="Search dishes, e.g. biryani" aria-label="Search dishes" style="margin-top:16px"><div id="sr"></div>`};
+const sres=()=>{const el=$("#sr");if(!el)return;const q=(($("[name=q]")||{}).value||"").trim().toLowerCase();
+ if(!q){el.innerHTML=`<p class="mut" style="margin-top:8px">Type a dish name to see every day you made it.</p>`;return}
+ const r=[];Object.keys(S.d).sort().reverse().forEach(s=>M.forEach(([k,n])=>dishes(s,k).forEach(d=>{if(d.name.toLowerCase().includes(q))r.push(`<button class="card row" style="width:100%;margin-top:8px;text-align:left" data-act="goto" data-d="${s}"><b class="sp">${esc(d.name)}</b><span class="mut">${n}, ${esc(fmt(s,{day:"numeric",month:"short",year:"numeric"}))}</span></button>`)})));
+ el.innerHTML=r.join("")||`<p class="mut" style="margin-top:8px">No dish matches “${esc(q)}”.</p>`};
+
+const askView=()=>`<h1>Ask MealBook</h1><p class="mut" style="margin-top:4px">Ask about anything you’ve logged, like “What did I have for dinner last Tuesday?”</p><div class="chat">${v.chat.map(m=>`<div class="msg ${m.r}">${esc(m.t)}</div>`).join("")}${v.busy?`<div class="msg a mut">Thinking…</div>`:""}</div><div class="row" style="margin-top:12px"><input name="cq" placeholder="Ask a question" aria-label="Your question" style="margin:0"><button class="btn" data-act="ask">Send</button></div>`;
+const nav=()=>`<nav>${[["day","🍽️","Meals"],["hist","📅","History"],["ask","💬","Ask AI"]].map(([t,i,n])=>`<button class="${v.tab===t?"on":""}" data-act="tab" data-t="${t}">${i}<br>${n}</button>`).join("")}</nav>`;
+
+function render(){const fn=document.activeElement&&document.activeElement.name;
+ $("#app").innerHTML=`<main>${v.tab==="hist"?histView():v.tab==="ask"?askView():v.meal?mealView():dayView()}</main>`+nav()+(v.zoom?`<div class="zoom" data-act="unzoom"><img src="${v.zoom}" alt="Photo"></div>`:"");
+ if(v.tab==="hist")sres();
+ if(fn){const e=$(`[name="${fn}"]`);if(e)e.focus()}}
+
+/* actions: return false to skip re-render */
+const A={
+ pd:a=>{const d=pd(v.date);d.setDate(d.getDate()+ +a.dataset.i);v.date=iso(d)},
+ open:a=>{v.meal=a.dataset.k;v.draft=null;if(!v.recs[v.date+v.meal])ideas(false)},
+ back:()=>{v.meal=null;v.draft=null;v.err=""},
+ new:()=>{v.err="";v.draft={id:"",name:"",notes:"",r:0,photos:[]}},
+ edit:a=>{const d=dishes(v.date,v.meal).find(x=>x.id===a.dataset.id);if(d){v.err="";v.draft={...d,photos:[...d.photos]}}},
+ del:a=>{if(v.del===a.dataset.id){S.d[v.date][v.meal]=dishes(v.date,v.meal).filter(x=>x.id!==a.dataset.id);v.del=null;save()}else v.del=a.dataset.id},
+ rate:a=>{v.draft.r=v.draft.r===+a.dataset.i?0:+a.dataset.i},
+ pick:()=>{$("#fi").click();return false},
+ rmp:a=>{v.draft.photos.splice(+a.dataset.i,1)},
+ cancel:()=>{v.draft=null;v.err=""},
+ save:()=>{const d=v.draft;if(!d.name.trim()){v.err="Give the dish a name.";return}put(v.date,v.meal,{...d,name:d.name.trim(),id:d.id||uid()});v.draft=null;v.err=""},
+ zoom:a=>{v.zoom=a.src},
+ unzoom:()=>{v.zoom=null},
+ ideas:()=>{ideas(true);return false},
+ addidea:a=>{const x=v.recs[v.date+v.meal][+a.dataset.i];put(v.date,v.meal,{id:uid(),name:x.name,notes:"",r:0,photos:[]})},
+ tab:a=>{v.tab=a.dataset.t;v.meal=null;v.draft=null},
+ goto:a=>{v.date=a.dataset.d;v.tab="day";v.meal=null},
+ pm:a=>{const d=pd(v.cal);d.setMonth(d.getMonth()+ +a.dataset.i);v.cal=iso(d)},
+ ask:()=>{ask();return false}
+};
+document.addEventListener("click",e=>{const a=e.target.closest("[data-act]");if(!a)return;if(a.dataset.act!=="del")v.del=null;if(A[a.dataset.act](a)!==false)render()});
+document.addEventListener("input",e=>{const t=e.target;if(t.name==="q")sres();else if(v.draft&&(t.name==="name"||t.name==="notes"))v.draft[t.name]=t.value});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.name==="cq")ask()});
+document.addEventListener("change",async e=>{if(e.target.id!=="fi"||!v.draft)return;
+ for(const f of e.target.files){const p=await shrink(f);if(p)v.draft.photos.push(p)}render()});
+
+render();
+load().then(s=>{if(s&&s.d){S=s;render()}});
+</script>
+<script>if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
+</body>
+</html>
