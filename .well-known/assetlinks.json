@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.talha_develops.spendly",
+        "sha256_cert_fingerprints": ["5B:97:DC:E6:47:57:F4:4C:53:CB:AF:7F:76:92:41:E8:09:5D:A1:96:09:9F:1E:97:46:C7:A7:38:18:12:55:6F"]
+      }
+    }]
