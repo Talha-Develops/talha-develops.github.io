@@ -45,10 +45,6 @@ button{cursor:pointer;border:0;background:none}
 input,textarea{width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
 .st{font-size:26px;color:var(--line);padding:0 2px}
 .st.on,.rt{color:var(--b)}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
-.cal button{aspect-ratio:1;border-radius:10px}
-.cal .has{background:color-mix(in srgb,var(--l) 28%,var(--card));font-weight:700}
-.cal .sel{outline:2px solid var(--ink)}
 .chat{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .msg{max-width:88%;padding:10px 12px;border-radius:14px;white-space:pre-wrap}
 .msg.u{align-self:flex-end;background:var(--ink);color:var(--bg)}
@@ -74,9 +70,9 @@ const fmt=(s,o)=>pd(s).toLocaleDateString(undefined,o);
 const uid=()=>Math.random().toString(36).slice(2,9);
 const M=[["breakfast","Breakfast","🍳","--b"],["lunch","Lunch","🍛","--l"],["snacks","Snacks","🥟","--s"],["desserts","Desserts","🍮","--e"],["dinner","Dinner","🌙","--n"]];
 const T0=iso(new Date());
-let S={d:{}},v={tab:"day",date:T0,meal:null,draft:null,recs:{},chat:[],busy:0,cal:T0.slice(0,8)+"01",zoom:null,del:null,err:""};
-const dishes=(s,m)=>(S.d[s]||{})[m]||[];
+let S={ideas:[]},v={tab:"day",meal:null,draft:null,zoom:null,del:null,err:"",recmeal:"breakfast",recommendations:null,recmessage:"",chat:[],busy:0};
 const IL=()=>(S.ideas=S.ideas||[]);
+const dishes=m=>IL().filter(i=>i.meal===m);
 const idl=()=>IL().map(i=>i.name+(i.meal?" ("+i.meal+")":"")).join("; ")||"(none)";
 const mname=k=>(M.find(x=>x[0]===k)||[])[1]||"";
 
@@ -84,91 +80,74 @@ const mname=k=>(M.find(x=>x[0]===k)||[])[1]||"";
 const idb=new Promise((ok,no)=>{try{const r=indexedDB.open("mealbook",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>ok(r.result);r.onerror=()=>no()}catch(e){no(e)}});
 const load=async()=>{try{const d=await idb;return await new Promise(ok=>{const q=d.transaction("kv").objectStore("kv").get("s");q.onsuccess=()=>ok(q.result);q.onerror=()=>ok()})}catch(e){}};
 const save=async()=>{try{const d=await idb;d.transaction("kv","readwrite").objectStore("kv").put(S,"s")}catch(e){}};
-const put=(s,m,d)=>{S.d[s]=S.d[s]||{};const L=S.d[s][m]=S.d[s][m]||[];const i=L.findIndex(x=>x.id===d.id);i<0?L.push(d):L[i]=d;save()};
-
+const putIdea=d=>{const L=IL(),i=L.findIndex(x=>x.id===d.id);i<0?L.unshift(d):L[i]=d;save()};
 /* photos: shrink to 800px JPEG */
 const shrink=f=>new Promise(ok=>{const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const k=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext("2d").drawImage(i,0,0,c.width,c.height);ok(c.toDataURL("image/jpeg",.72))};i.onerror=()=>ok(null);i.src=r.result};r.onerror=()=>ok(null);r.readAsDataURL(f)});
 
-/* AI */
-const ai=async(p,o)=>{if(!window.claude)throw 0;const s=await claude.use("sample");if(!s)throw 0;return (await s(p,o)).text};
-const log=n=>{const o=[];Object.keys(S.d).sort().reverse().slice(0,n).forEach(s=>M.forEach(([k])=>{const L=dishes(s,k);if(L.length)o.push(s+" ("+fmt(s,{weekday:"long"})+") "+k+": "+L.map(d=>d.name+(d.r?" "+d.r+"/5":"")+(d.notes?" ["+d.notes.slice(0,80)+"]":"")).join("; "))}));return o.join("\n")||"(no meals logged yet)"};
-const ideas=async force=>{const k=v.meal,key=v.date+k;v.recs[key]="load";render();
- try{const t=await ai(`You suggest ${k} ideas for a home cook. Date: ${v.date}. Their log, newest first:\n${log(30)}\n\nTheir saved dish ideas: ${idl()}. Suggest 3 ${k} dishes for ${v.date}, using a saved idea when one fits. Avoid anything they had for ${k} in the last 5 days, favor dishes rated 4-5, and mix 2 familiar ideas with 1 new one. Reply with ONLY a JSON array like [{"name":"...","why":"one short sentence"}].`,{cache:!force,modelTier:"quick"});
-  v.recs[key]=JSON.parse(t.slice(t.indexOf("["),t.lastIndexOf("]")+1)).slice(0,3).map(x=>({name:String(x.name),why:String(x.why||"")}))}catch(e){v.recs[key]="err"}render()};
-const ask=async()=>{const q=($("[name=cq]")||{}).value;if(!q||!q.trim()||v.busy)return;v.chat.push({r:"u",t:q.trim()});v.busy=1;render();
- try{const h=v.chat.slice(-7,-1).map(m=>(m.r==="u"?"User: ":"Assistant: ")+m.t).join("\n");
-  const t=await ai(`You are the assistant inside MealBook, a personal meal diary. Today is ${T0} (${fmt(T0,{weekday:"long"})}). Answer ONLY from the records below. If the answer is not in them, say you can’t find it in the diary. Be brief and friendly.\n\nRECORDS (date, meal: dishes with rating and notes):\n${log(400)}\n\nSAVED DISH IDEAS (not cooked yet): ${idl()}\n\nConversation so far:\n${h}\n\nUser: ${q.trim()}`,{cache:false});
-  v.chat.push({r:"a",t:t.trim()})}catch(e){v.chat.push({r:"a",t:"I couldn’t reach the AI. Allow AI for this page, then try again."})}
- v.busy=0;render()};
+/* Menu ideas are stored by meal category, not by date. */
+
+const ai=async(p,o)=>{if(!window.claude)throw new Error("AI is not available in this browser. Open this app in the environment that provides AI access.");const s=await claude.use("sample");if(!s)throw new Error("AI access is unavailable.");return (await s(p,o||{})).text};
+const ideaContext=()=>IL().map(i=>`${mname(i.meal)}: ${i.name}${i.notes?" — "+i.notes:""}`).join("\n")||"(No saved ideas yet)";
+const getRecommendations=async()=>{v.recmessage="";v.recommendations=null;v.busy=1;render();try{const t=await ai(`You are a friendly meal idea assistant. The user has saved these menu ideas:\n${ideaContext()}\nRecommend 3 options for ${mname(v.recmeal)}. Prefer their saved ideas where suitable, and include a new idea if helpful. Reply ONLY with a JSON array of objects with name and why fields.`,{cache:false,modelTier:"quick"});v.recommendations=JSON.parse(t.slice(t.indexOf("["),t.lastIndexOf("]")+1)).slice(0,3)}catch(e){v.recmessage=e.message||"Could not get recommendations. Check that AI access is enabled."}v.busy=0;render()};
+const ask=async()=>{const el=$("[name=cq]"),q=el&&el.value;if(!q||!q.trim()||v.busy)return;v.chat.push({r:"u",t:q.trim()});v.busy=1;render();try{const t=await ai(`You are MealBook AI. Answer the user's question using their saved menu ideas below. Be friendly and concise. If the saved ideas don't contain enough information, say so and offer general meal suggestions clearly as suggestions.\nSAVED IDEAS:\n${ideaContext()}\nQUESTION: ${q.trim()}`,{cache:false});v.chat.push({r:"a",t:t.trim()})}catch(e){v.chat.push({r:"a",t:e.message||"I couldn't reach AI. Please check AI access for this page."})}v.busy=0;render()};
 
 /* views */
-const dayView=()=>`<div class="row"><button class="btn o" data-act="pd" data-i="-1" aria-label="Previous day">‹</button><div class="sp" style="text-align:center"><h1>${v.date===T0?"Today":esc(fmt(v.date,{weekday:"long"}))}</h1><div class="mut">${esc(fmt(v.date,{day:"numeric",month:"long",year:"numeric"}))}</div></div><button class="btn o" data-act="pd" data-i="1" aria-label="Next day">›</button></div>`
- +M.map(([k,n,ic,c])=>{const L=dishes(v.date,k),ph=L.flatMap(d=>d.photos).slice(0,3);
-  return `<button class="meal" style="--c:var(${c})" data-act="open" data-k="${k}"><div class="row"><span style="font-size:28px">${ic}</span><div class="sp"><h2>${n}</h2><div class="mut t">${L.length?esc(L.map(d=>d.name).join(", ")):"Nothing logged yet"}</div></div>${ph.map(p=>`<img class="th" src="${p}" alt="">`).join("")}</div></button>`}).join("");
+const dayView=()=>`<h1>MealBook</h1><p class="mut" style="margin-top:6px">Your personal menu ideas. Tap a meal to save dishes you might make.</p>`
+ +M.map(([k,n,ic,c])=>{const L=dishes(k);return `<button class="meal" style="--c:var(${c})" data-act="open" data-k="${k}"><div class="row"><span style="font-size:28px">${ic}</span><div class="sp"><h2>${n}</h2><div class="mut t">${L.length?esc(L.map(d=>d.name).join(", ")):"No ideas saved yet"}</div></div></div></button>`}).join("");
 
 const form=()=>{const d=v.draft;return `<div class="card" style="margin-bottom:12px"><input name="name" placeholder="Dish name" value="${esc(d.name)}" aria-label="Dish name"><textarea name="notes" rows="3" placeholder="Ingredients, recipe or notes (optional)" aria-label="Notes" style="resize:vertical">${esc(d.notes)}</textarea><div class="row" style="margin-top:8px"><span class="mut">Rating</span>${[1,2,3,4,5].map(i=>`<button class="st ${i<=d.r?"on":""}" data-act="rate" data-i="${i}" aria-label="${i} stars">★</button>`).join("")}</div><div class="ph">${d.photos.map((p,i)=>`<span class="pw"><img class="th" src="${p}" alt=""><button class="x" data-act="rmp" data-i="${i}" aria-label="Remove photo">×</button></span>`).join("")}</div><button class="btn o" data-act="pick" style="margin-top:8px">📷 Add photos</button><input id="fi" type="file" accept="image/*" multiple hidden>${v.err?`<p class="mut" role="alert" style="margin-top:8px">${v.err}</p>`:""}<div class="row" style="margin-top:12px"><button class="btn sp" data-act="save">Save dish</button><button class="btn o" data-act="cancel">Cancel</button></div></div>`};
 
-const mealView=()=>{const [k,n,ic,c]=M.find(x=>x[0]===v.meal),L=dishes(v.date,k),r=v.recs[v.date+k];
- return `<div style="--c:var(${c})"><div class="row"><button class="btn o" data-act="back" aria-label="Back to meals">‹</button><h1 class="sp">${ic} ${n}</h1></div><p class="mut" style="margin:4px 0 12px">${esc(fmt(v.date,{weekday:"long",day:"numeric",month:"long"}))}</p>`
- +(v.draft?form():`<button class="btn" data-act="new" style="width:100%">Add a dish</button>`)
- +(L.length?L.map(d=>`<div class="card dish"><div class="row"><b class="sp">${esc(d.name)}</b><span class="rt">${"★".repeat(d.r)}</span><button data-act="edit" data-id="${d.id}" aria-label="Edit ${esc(d.name)}">✏️</button><button data-act="del" data-id="${d.id}" aria-label="Delete ${esc(d.name)}">${v.del===d.id?"Delete?":"🗑️"}</button></div>${d.notes?`<p class="mut" style="margin-top:6px;white-space:pre-wrap">${esc(d.notes)}</p>`:""}<div class="ph">${d.photos.map(p=>`<img class="th" src="${p}" data-act="zoom" alt="Photo of ${esc(d.name)}">`).join("")}</div></div>`).join(""):`<p class="mut" style="margin-top:12px">No dishes yet. Add what you cooked, with photos if you like.</p>`)
- +`<div class="row" style="margin-top:24px"><h2 class="sp">${v.date===T0?"Ideas for today":"Ideas for this day"}</h2><button class="btn o" data-act="ideas" aria-label="Refresh ideas">↻ Refresh</button></div>`
- +(r==="load"?`<p class="mut" style="margin-top:8px">Thinking up ideas…</p>`:r==="err"?`<p class="mut" style="margin-top:8px">Couldn’t get ideas. Allow AI for this page, then refresh.</p>`:Array.isArray(r)?r.map((x,i)=>`<div class="card row" style="margin-top:8px"><div class="sp"><b>${esc(x.name)}</b><div class="mut">${esc(x.why)}</div></div><button class="btn o" data-act="saveidea" data-i="${i}" aria-label="Save ${esc(x.name)} to idea box">♡ Save</button><button class="btn" data-act="addidea" data-i="${i}" aria-label="Add ${esc(x.name)} to this menu">Add</button></div>`).join(""):"")+`</div>`};
+const mealView=()=>{const [k,n,ic,c]=M.find(x=>x[0]===v.meal),L=dishes(k);
+ return `<div style="--c:var(${c})"><div class="row"><button class="btn o" data-act="back" aria-label="Back to meals">‹</button><h1 class="sp">${ic} ${n} ideas</h1></div><p class="mut" style="margin:4px 0 12px">Save dishes here anytime — no dates or daily tracking.</p>`
+ +(v.draft?form():`<button class="btn" data-act="new" style="width:100%">＋ Add an idea</button>`)
+ +(L.length?L.map(d=>`<div class="card dish"><div class="row"><b class="sp">${esc(d.name)}</b><button data-act="edit" data-id="${d.id}" aria-label="Edit ${esc(d.name)}">✏️</button><button data-act="del" data-id="${d.id}" aria-label="Delete ${esc(d.name)}">${v.del===d.id?"Delete?":"🗑️"}</button></div>${d.notes?`<p class="mut" style="margin-top:6px;white-space:pre-wrap">${esc(d.notes)}</p>`:""}<div class="ph">${d.photos.map(p=>`<img class="th" src="${p}" data-act="zoom" alt="Photo of ${esc(d.name)}">`).join("")}</div></div>`).join(""):`<p class="mut" style="margin-top:12px">No ideas yet. Add something like dosa, idli, or pancakes.</p>`)
+ +`</div>`};
 
-const histView=()=>{const c=pd(v.cal),y=c.getFullYear(),m=c.getMonth(),n=new Date(y,m+1,0).getDate();
- let g="SMTWTFS".split("").map(x=>`<b class="mut">${x}</b>`).join("")+"<i></i>".repeat(c.getDay());
- for(let d=1;d<=n;d++){const s=iso(new Date(y,m,d)),has=M.some(([k])=>dishes(s,k).length);g+=`<button class="${has?"has":""} ${s===v.date?"sel":""}" data-act="goto" data-d="${s}">${d}</button>`}
- return `<h1>History</h1><div class="row" style="margin:12px 0"><button class="btn o" data-act="pm" data-i="-1" aria-label="Previous month">‹</button><b class="sp" style="text-align:center">${esc(c.toLocaleDateString(undefined,{month:"long",year:"numeric"}))}</b><button class="btn o" data-act="pm" data-i="1" aria-label="Next month">›</button></div><div class="cal">${g}</div><input name="q" type="search" placeholder="Search dishes, e.g. biryani" aria-label="Search dishes" style="margin-top:16px"><div id="sr"></div>`};
-const sres=()=>{const el=$("#sr");if(!el)return;const q=(($("[name=q]")||{}).value||"").trim().toLowerCase();
- if(!q){el.innerHTML=`<p class="mut" style="margin-top:8px">Type a dish name to see every day you made it.</p>`;return}
- const r=[];Object.keys(S.d).sort().reverse().forEach(s=>M.forEach(([k,n])=>dishes(s,k).forEach(d=>{if(d.name.toLowerCase().includes(q))r.push(`<button class="card row" style="width:100%;margin-top:8px;text-align:left" data-act="goto" data-d="${s}"><b class="sp">${esc(d.name)}</b><span class="mut">${n}, ${esc(fmt(s,{day:"numeric",month:"short",year:"numeric"}))}</span></button>`)})));
- el.innerHTML=r.join("")||`<p class="mut" style="margin-top:8px">No dish matches “${esc(q)}”.</p>`};
+const recommendationView=()=>`<h1>✨ Daily picks</h1><p class="mut" style="margin-top:6px">Get suggestions based on the ideas you have saved in MealBook.</p>
+<div class="card" style="margin-top:14px"><label for="recmeal">Choose a meal</label><select id="recmeal" name="recmeal">${M.map(([k,n])=>`<option value="${k}" ${v.recmeal===k?"selected":""}>${n}</option>`).join("")}</select><button class="btn" data-act="recommend" style="width:100%;margin-top:12px">✨ Recommend dishes</button></div>
+${v.recommendations?`<div style="margin-top:14px"><h2>Suggestions for ${esc(mname(v.recmeal||"breakfast"))}</h2>${v.recommendations.map(x=>`<div class="card" style="margin-top:8px"><b>${esc(x.name)}</b><p class="mut" style="margin-top:4px">${esc(x.why)}</p></div>`).join("")}</div>`:""}
+${v.recmessage?`<p class="mut" role="status" style="margin-top:12px">${esc(v.recmessage)}</p>`:""}`;
 
-const askView=()=>`<h1>Ask MealBook</h1><p class="mut" style="margin-top:4px">Ask about anything you’ve logged, like “What did I have for dinner last Tuesday?”</p><div class="chat">${v.chat.map(m=>`<div class="msg ${m.r}">${esc(m.t)}</div>`).join("")}${v.busy?`<div class="msg a mut">Thinking…</div>`:""}</div><div class="row" style="margin-top:12px"><input name="cq" placeholder="Ask a question" aria-label="Your question" style="margin:0"><button class="btn" data-act="ask">Send</button></div>`;
-const boxView=()=>{const L=IL();
- return `<h1>Idea box</h1><p class="mut" style="margin-top:4px">Save dishes you want to try. Adding one puts it on ${v.date===T0?"today":esc(fmt(v.date,{weekday:"long",day:"numeric",month:"short"}))}.</p><div class="card" style="margin-top:12px"><input name="in" placeholder="Dish idea, e.g. Mushroom biryani" aria-label="Dish idea"><textarea name="iv" rows="2" placeholder="Notes or a recipe link (optional)" aria-label="Notes" style="resize:vertical"></textarea><select name="im" aria-label="Meal"><option value="">Any meal</option>${M.map(([k,n])=>`<option value="${k}">${n}</option>`).join("")}</select><button class="btn" data-act="saveown" style="width:100%;margin-top:12px">Save idea</button></div>`
- +(L.length?L.map(i=>{const m=M.find(x=>x[0]===i.meal);return `<div class="card dish" style="--c:var(${m?m[3]:"--line"})"><div class="row"><b class="sp">${esc(i.name)}</b>${m?`<span class="mut">${m[2]} ${m[1]}</span>`:""}<button data-act="delidea" data-id="${i.id}" aria-label="Delete ${esc(i.name)}">${v.del===i.id?"Delete?":"🗑️"}</button></div>${i.notes?`<p class="mut" style="margin-top:6px;white-space:pre-wrap">${esc(i.notes)}</p>`:""}<div class="row" style="margin-top:8px"><span class="mut sp">Add to ${v.date===T0?"today":"this day"}</span>${(m?[m]:M).map(([k,n,ic])=>`<button class="mb" data-act="cook" data-id="${i.id}" data-k="${k}" aria-label="Add ${esc(i.name)} to ${n}">${ic}${m?" "+n:""}</button>`).join("")}</div></div>`}).join(""):`<p class="mut" style="margin-top:12px">No ideas yet. Jot down dishes you want to try, then add them to a day in one tap.</p>`)};
-const nav=()=>`<nav>${[["day","🍽️","Meals"],["box","💡","Idea box"],["hist","📅","History"],["ask","💬","Ask AI"]].map(([t,i,n])=>`<button class="${v.tab===t?"on":""}" data-act="tab" data-t="${t}">${i}<br>${n}</button>`).join("")}</nav>`;
+const askView=()=>`<h1>💬 Ask MealBook AI</h1><p class="mut" style="margin-top:6px">Ask questions about your saved menu ideas, like “What can I make with my lunch ideas?” or “Suggest something different from my usual breakfast ideas.”</p>
+<div class="chat">${v.chat.map(m=>`<div class="msg ${m.r}">${esc(m.t)}</div>`).join("")}${v.busy?`<div class="msg a mut">Thinking…</div>`:""}</div>
+<div class="row" style="margin-top:12px"><input name="cq" placeholder="Ask about your saved ideas" aria-label="Your question" style="margin:0"><button class="btn" data-act="ask">Send</button></div>
+<p class="mut" style="margin-top:8px">AI needs to be enabled by the environment hosting this HTML file. If it is unavailable, the app will show a message.</p>`;
+
+const boxView=()=>`<h1>Menu ideas</h1><p class="mut" style="margin-top:4px">Choose Breakfast, Lunch, Snacks, Desserts or Dinner from Meals to add ideas.</p>`;
+
+const nav=()=>`<nav>${[["day","🍽️","Meals"],["recommend","✨","Daily picks"],["ask","💬","Ask AI"]].map(([t,i,n])=>`<button class="${(v.tab===t)?"on":""}" data-act="tab" data-t="${t}">${i}<br>${n}</button>`).join("")}</nav>`;
 
 function render(){const fn=document.activeElement&&document.activeElement.name;
- $("#app").innerHTML=`<main>${v.tab==="hist"?histView():v.tab==="ask"?askView():v.tab==="box"?boxView():v.meal?mealView():dayView()}</main>`+nav()+(v.toast?`<div class="toast" role="status">${esc(v.toast)}</div>`:"")+(v.zoom?`<div class="zoom" data-act="unzoom"><img src="${v.zoom}" alt="Photo"></div>`:"");
+ $("#app").innerHTML=`<main>${v.meal?mealView():v.tab==="recommend"?recommendationView():v.tab==="ask"?askView():dayView()}</main>`+nav()+(v.toast?`<div class="toast" role="status">${esc(v.toast)}</div>`:"")+(v.zoom?`<div class="zoom" data-act="unzoom"><img src="${v.zoom}" alt="Photo"></div>`:"");
  if(v.tab==="hist")sres();
  if(fn){const e=$(`[name="${fn}"]`);if(e)e.focus()}}
 
 /* actions: return false to skip re-render */
 const A={
- pd:a=>{const d=pd(v.date);d.setDate(d.getDate()+ +a.dataset.i);v.date=iso(d)},
- open:a=>{v.meal=a.dataset.k;v.draft=null;if(!v.recs[v.date+v.meal])ideas(false)},
+ open:a=>{v.meal=a.dataset.k;v.draft=null;v.err=""},
  back:()=>{v.meal=null;v.draft=null;v.err=""},
  new:()=>{v.err="";v.draft={id:"",name:"",notes:"",r:0,photos:[]}},
- edit:a=>{const d=dishes(v.date,v.meal).find(x=>x.id===a.dataset.id);if(d){v.err="";v.draft={...d,photos:[...d.photos]}}},
- del:a=>{if(v.del===a.dataset.id){S.d[v.date][v.meal]=dishes(v.date,v.meal).filter(x=>x.id!==a.dataset.id);v.del=null;save()}else v.del=a.dataset.id},
+ edit:a=>{const d=dishes(v.meal).find(x=>x.id===a.dataset.id);if(d){v.err="";v.draft={...d,photos:[...d.photos]}}},
+ del:a=>{if(v.del===a.dataset.id){S.ideas=IL().filter(x=>x.id!==a.dataset.id);v.del=null;save()}else v.del=a.dataset.id},
  rate:a=>{v.draft.r=v.draft.r===+a.dataset.i?0:+a.dataset.i},
  pick:()=>{$("#fi").click();return false},
  rmp:a=>{v.draft.photos.splice(+a.dataset.i,1)},
  cancel:()=>{v.draft=null;v.err=""},
- save:()=>{const d=v.draft;if(!d.name.trim()){v.err="Give the dish a name.";return}put(v.date,v.meal,{...d,name:d.name.trim(),id:d.id||uid()});v.draft=null;v.err=""},
+ save:()=>{const d=v.draft;if(!d.name.trim()){v.err="Give the dish a name.";return}putIdea({...d,name:d.name.trim(),id:d.id||uid(),meal:v.meal});v.draft=null;v.err=""},
  zoom:a=>{v.zoom=a.src},
  unzoom:()=>{v.zoom=null},
- ideas:()=>{ideas(true);return false},
- addidea:a=>{const x=v.recs[v.date+v.meal][+a.dataset.i];put(v.date,v.meal,{id:uid(),name:x.name,notes:"",r:0,photos:[]})},
- tab:a=>{v.tab=a.dataset.t;v.meal=null;v.draft=null},
- goto:a=>{v.date=a.dataset.d;v.tab="day";v.meal=null},
- pm:a=>{const d=pd(v.cal);d.setMonth(d.getMonth()+ +a.dataset.i);v.cal=iso(d)},
- ask:()=>{ask();return false},
- saveown:()=>{const n=$("[name=in]").value.trim();if(!n){v.toast="Type a dish idea first.";return}IL().unshift({id:uid(),name:n,notes:$("[name=iv]").value.trim(),meal:$("[name=im]").value});save();v.toast="Saved to your idea box."},
- saveidea:a=>{const x=v.recs[v.date+v.meal][+a.dataset.i];IL().unshift({id:uid(),name:x.name,notes:x.why,meal:v.meal});save();v.toast="Saved "+x.name+" to your idea box."},
- delidea:a=>{if(v.del===a.dataset.id){S.ideas=IL().filter(i=>i.id!==a.dataset.id);v.del=null;save()}else v.del=a.dataset.id},
- cook:a=>{const i=IL().find(x=>x.id===a.dataset.id);put(v.date,a.dataset.k,{id:uid(),name:i.name,notes:i.notes,r:0,photos:[]});v.toast="Added "+i.name+" to "+mname(a.dataset.k)+" on "+(v.date===T0?"today":fmt(v.date,{weekday:"long"}))+"."}
+ tab:a=>{v.tab=a.dataset.t;v.meal=null;v.draft=null;v.err=""},
+ recommend:()=>{const sel=$("#recmeal");if(sel)v.recmeal=sel.value;getRecommendations();return false},
+ ask:()=>{ask();return false}
 };
 document.addEventListener("click",e=>{const a=e.target.closest("[data-act]");if(!a)return;v.toast="";if(!/^del/.test(a.dataset.act))v.del=null;if(A[a.dataset.act](a)!==false)render()});
-document.addEventListener("input",e=>{const t=e.target;if(t.name==="q")sres();else if(v.draft&&(t.name==="name"||t.name==="notes"))v.draft[t.name]=t.value});
+document.addEventListener("input",e=>{const t=e.target;if(v.draft&&(t.name==="name"||t.name==="notes"))v.draft[t.name]=t.value});
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.name==="cq")ask()});
 document.addEventListener("change",async e=>{if(e.target.id!=="fi"||!v.draft)return;
  for(const f of e.target.files){const p=await shrink(f);if(p)v.draft.photos.push(p)}render()});
 
 render();
-load().then(s=>{if(s&&s.d){S=s;render()}});
+load().then(s=>{if(s){if(Array.isArray(s.ideas)){S={ideas:s.ideas}}else{const ideas=[];if(s.d)Object.values(s.d).forEach(byMeal=>Object.entries(byMeal||{}).forEach(([meal,list])=>(list||[]).forEach(d=>ideas.push({...d,meal}))));S={ideas};save()}render()}});
 </script>
 <script>if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
 </body>
